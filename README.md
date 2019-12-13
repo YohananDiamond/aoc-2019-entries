@@ -5,7 +5,8 @@ I'm doing everything here in Rust, and maybe I won't complete everything in time
 
 ## Progress
 
-| Part | State |
+| Part          | State |
+|---------------|-------|
 | Day 1, Part 1 | Done! |
 | Day 1, Part 2 | Done! |
 | Day 2, Part 1 | Done! |
