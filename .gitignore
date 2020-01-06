@@ -1,2 +1,3 @@
 # Rust target folders
-**/target/
+*/target/
+*/Cargo.lock
