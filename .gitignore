@@ -1,3 +1,6 @@
 # Rust target folders
 */target/
 */Cargo.lock
+day3/src/src
+day4/main
+day4/main.o
