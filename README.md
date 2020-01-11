@@ -8,8 +8,12 @@ And yeah, it's already 2020, I'm late... but no problem, this seems interesting!
 ## Progress
 
 ```
-Day01 -> Part1 => Done!
-         Part2 => Done!
-Day02 -> Part1 => Done!
+Day01 -> Part1 => Done;
+         Part2 => Done;
+Day02 -> Part1 => Done;
          Part2 => Gave up;
+Day03 -> Part1 => Done;
+         Part2 => Gave up;
+Day04 -> Part1 => Done;
+         Part2 => Done;
 ```
