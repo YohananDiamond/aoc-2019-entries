@@ -94,15 +94,14 @@ fn eval(memory: &mut Vec<i32>, position: usize, command: (Instruction, bool, boo
             (2, false)
         },
 
-        // OUT &ADDR
+        // OUT NUM
         Instruction::Out => {
             eprint!("{:?}: OUT ", &memory[position..position+2]);
 
-            // let param1: usize = if command.1 { panic!("param1 must be on address mode"); } else { memory[position + 1] as usize };
-            let param1: usize = memory[position + 1] as usize;
+            let param1: i32 = if command.1 { memory[position + 1] } else { memory[memory[position + 1] as usize] };
 
             eprint!("&{}\n", param1);
-            println!("{}", memory[param1]);
+            println!("{}", param1);
             (2, false)
         },
 
