@@ -268,10 +268,10 @@ mod tests {
             vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 15508323],
         );
 
-        // TODO: put test for results of Part 2 after getting it.
-        /* assert_eq!(
-            init_computer(memory.clone(), 1).1,
-            vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 15508323],
-        ); */
+        // Part 2: finally, this is done.
+        assert_eq!(
+            init_computer(memory.clone(), 5).1,
+            vec![9006327],
+        );
     }
 }
