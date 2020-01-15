@@ -10,7 +10,17 @@ enum Instruction {
     Mul = 2, // Multiplication
     Inp = 3, // Input
     Out = 4, // Output
+    Jit = 5, // Jump if True
+    Jif = 6, // Jump if False
+    Let = 7, // Less than
+    Equ = 8, // Equals
     Hlt = 99, // Halt
+}
+
+/// Contains basic commands for moving the instruction pointer.
+enum PointerCommand {
+    Add(i32), // Add to the pointer
+    Jmp(i32), // Set the pointer position to a specific place
 }
 
 /// Parses an integer and returns a command and its parameter modes.
@@ -25,12 +35,12 @@ fn extract_command(mut command: i32) -> (i32, bool, bool, bool) {
     let p2mode = match command / 010_00 {
         0 => false,
         1 => { command %= 010_00; true },
-        x => panic!("Invalid int in place for p3mode: {} at {}", x, command),
+        x => panic!("Invalid int in place for p2mode: {} at {}", x, command),
     };
     let p1mode = match command / 001_00 {
         0 => false,
         1 => { command %= 001_00; true },
-        x => panic!("Invalid int in place for p3mode: {} at {}", x, command),
+        x => panic!("Invalid int in place for p1mode: {} at {}", x, command),
     };
     (command, p1mode, p2mode, p3mode)
 }
@@ -38,12 +48,16 @@ fn extract_command(mut command: i32) -> (i32, bool, bool, bool) {
 /// Pipes an integer, `command`, through extract_command() and then parses the result, matching
 /// the first number with an instruction.
 fn parse_command(command: i32) -> (Instruction, bool, bool, bool) {
-    let mut extraction = extract_command(command);
+    let extraction = extract_command(command);
     (match extraction.0 {
         1 => Instruction::Add,
         2 => Instruction::Mul,
         3 => Instruction::Inp,
         4 => Instruction::Out,
+        5 => Instruction::Jit,
+        6 => Instruction::Jif,
+        7 => Instruction::Let,
+        8 => Instruction::Equ,
         99 => Instruction::Hlt,
         _ => unimplemented!(),
     }, extraction.1, extraction.2, extraction.3)
@@ -54,7 +68,7 @@ fn parse_command(command: i32) -> (Instruction, bool, bool, bool) {
 /// Return type is a tuple: (pos_add: usize, stop: bool)
 /// pos_add: is the number to be added to the position.
 /// stop: is a boolean indicating whether the machine is going to stop or not.
-fn eval(memory: &mut Vec<i32>, position: usize, command: (Instruction, bool, bool, bool), input: i32) -> (usize, bool) {
+fn eval(memory: &mut Vec<i32>, position: usize, command: (Instruction, bool, bool, bool), input: i32) -> (PointerCommand, bool) {
     // Tip: on the match arms below, i32 variables usually mean values and usizes reference-only (considering the Intcode computer as the actual machine).
     match command.0 {
         // ADD OP1, OP2, &DEST
@@ -67,7 +81,7 @@ fn eval(memory: &mut Vec<i32>, position: usize, command: (Instruction, bool, boo
 
             eprint!("{}, {}, &{}\n", param1, param2, param3);
             memory[param3] = param1 + param2;
-            (4, false)
+            (PointerCommand::Add(4), false)
         },
 
         // MUL OP1, OP2, &DEST
@@ -80,7 +94,7 @@ fn eval(memory: &mut Vec<i32>, position: usize, command: (Instruction, bool, boo
 
             eprint!("{}, {}, &{}\n", param1, param2, param3);
             memory[param3] = param1 * param2;
-            (4, false)
+            (PointerCommand::Add(4), false)
         },
 
         // INP &DEST
@@ -91,7 +105,7 @@ fn eval(memory: &mut Vec<i32>, position: usize, command: (Instruction, bool, boo
 
             eprint!("&{}\n", param1);
             memory[param1] = input;
-            (2, false)
+            (PointerCommand::Add(2), false)
         },
 
         // OUT NUM
@@ -100,38 +114,88 @@ fn eval(memory: &mut Vec<i32>, position: usize, command: (Instruction, bool, boo
 
             let param1: i32 = if command.1 { memory[position + 1] } else { memory[memory[position + 1] as usize] };
 
-            eprint!("&{}\n", param1);
+            eprint!("{}{}\n", if command.1 { "" } else { "&" }, param1);
             println!("{}", param1);
-            (2, false)
+            (PointerCommand::Add(2), false)
         },
 
         // HLT
         Instruction::Hlt => {
-            eprint!("{:?}: HLT\n", &memory[position]);
-            (0, true)
+            eprint!("[{:?}]: HLT\n", &memory[position]);
+            (PointerCommand::Add(0), true)
         },
 
-        // ...
-        _ => unimplemented!(),
+        // JIT VAL &POS
+        // Jump if VAL != 0
+        Instruction::Jit => {
+            eprint!("{:?}: JIT ", &memory[position..position+3]);
+
+            let param1: i32 = if command.1 { memory[position + 1] } else { memory[memory[position + 1] as usize] };
+            let param2: usize = memory[position + 2] as usize;
+
+            eprint!("{}, &{}\n", param1, param2);
+            (if param1 != 0 { PointerCommand::Jmp(param2 as i32) } else { PointerCommand::Add(3) }, false)
+        },
+
+        // JIF VAL &POS
+        // Jump if VAL == 0
+        Instruction::Jif => {
+            eprint!("{:?}: JIF ", &memory[position..position+3]);
+
+            let param1: i32 = if command.1 { memory[position + 1] } else { memory[memory[position + 1] as usize] };
+            let param2: usize = memory[position + 2] as usize;
+
+            eprint!("{}, &{}\n", param1, param2);
+            (if param1 == 0 { PointerCommand::Jmp(param2 as i32) } else { PointerCommand::Add(3) }, false)
+        },
+
+        // LET VAL1 VAL2 &DEST
+        Instruction::Let => {
+            eprint!("{:?}: LET ", &memory[position..position+4]);
+            
+            let param1: i32 = if command.1 { memory[position + 1] } else { memory[memory[position + 1] as usize] };
+            let param2: i32 = if command.2 { memory[position + 2] } else { memory[memory[position + 2] as usize] };
+            let param3: usize = if command.3 { panic!("param3 must be on address mode"); } else { memory[position + 3] as usize };
+
+            eprint!("{}, {}, &{}\n", param1, param2, param3);
+            let result: i32 = if param1 < param2 { 1 } else { 0 };
+            memory[param3] = result;
+            (PointerCommand::Add(4), false)
+        },
+
+        // EQU VAL1 VAL2 &DEST
+        Instruction::Equ => {
+            eprint!("{:?}: EQU ", &memory[position..position+4]);
+            
+            let param1: i32 = if command.1 { memory[position + 1] } else { memory[memory[position + 1] as usize] };
+            let param2: i32 = if command.2 { memory[position + 2] } else { memory[memory[position + 2] as usize] };
+            let param3: usize = if command.3 { panic!("param3 must be on address mode"); } else { memory[position + 3] as usize };
+
+            eprint!("{}, {}, &{}\n", param1, param2, param3);
+            let result: i32 = if param1 == param2 { 1 } else { 0 };
+            memory[param3] = result;
+            (PointerCommand::Add(4), false)
+        },
     }
 }
 
 /// Takes the memory vector and uses the computer to run the code.
 /// After running, returns the memory once taken, but with the modifications that were done at runtime.
 fn init_computer(mut memory: Vec<i32>, input: i32) -> Vec<i32> {
-    let mut power = true;
-    let mut command_index = 0;
-    let input = 1;
+    let mut command_index: i32 = 0;
 
     loop {
-        if let Some(cmd) = memory.get(command_index) {
+        if let Some(cmd) = memory.get(command_index as usize) {
             let command_raw = *cmd;
             let parsed_command = parse_command(command_raw);
-            let (pos_add, stop) = eval(&mut memory, command_index as usize, parsed_command, input);
+            let (pointer_command, stop) = eval(&mut memory, command_index as usize, parsed_command, input);
 
-            command_index += pos_add;
-            if stop { power = false; break; };
-        } else if power {
+            match pointer_command {
+                PointerCommand::Add(u) => command_index += u,
+                PointerCommand::Jmp(u) => command_index = u,
+            };
+            if stop { break; }
+        } else {
             panic!("Computer is still on after processing all commands.");
         }
     }
@@ -141,8 +205,9 @@ fn init_computer(mut memory: Vec<i32>, input: i32) -> Vec<i32> {
 
 fn main() {
     let mut memory: Vec<i32> = vec![3,225,1,225,6,6,1100,1,238,225,104,0,1101,91,67,225,1102,67,36,225,1102,21,90,225,2,13,48,224,101,-819,224,224,4,224,1002,223,8,223,101,7,224,224,1,223,224,223,1101,62,9,225,1,139,22,224,101,-166,224,224,4,224,1002,223,8,223,101,3,224,224,1,223,224,223,102,41,195,224,101,-2870,224,224,4,224,1002,223,8,223,101,1,224,224,1,224,223,223,1101,46,60,224,101,-106,224,224,4,224,1002,223,8,223,1001,224,2,224,1,224,223,223,1001,191,32,224,101,-87,224,224,4,224,102,8,223,223,1001,224,1,224,1,223,224,223,1101,76,90,225,1101,15,58,225,1102,45,42,224,101,-1890,224,224,4,224,1002,223,8,223,1001,224,5,224,1,224,223,223,101,62,143,224,101,-77,224,224,4,224,1002,223,8,223,1001,224,4,224,1,224,223,223,1101,55,54,225,1102,70,58,225,1002,17,80,224,101,-5360,224,224,4,224,102,8,223,223,1001,224,3,224,1,223,224,223,4,223,99,0,0,0,677,0,0,0,0,0,0,0,0,0,0,0,1105,0,99999,1105,227,247,1105,1,99999,1005,227,99999,1005,0,256,1105,1,99999,1106,227,99999,1106,0,265,1105,1,99999,1006,0,99999,1006,227,274,1105,1,99999,1105,1,280,1105,1,99999,1,225,225,225,1101,294,0,0,105,1,0,1105,1,99999,1106,0,300,1105,1,99999,1,225,225,225,1101,314,0,0,106,0,0,1105,1,99999,1008,677,677,224,102,2,223,223,1005,224,329,1001,223,1,223,1108,677,226,224,1002,223,2,223,1006,224,344,101,1,223,223,107,677,226,224,1002,223,2,223,1006,224,359,101,1,223,223,108,677,677,224,1002,223,2,223,1006,224,374,1001,223,1,223,108,226,677,224,1002,223,2,223,1006,224,389,101,1,223,223,7,226,677,224,102,2,223,223,1006,224,404,1001,223,1,223,1108,677,677,224,1002,223,2,223,1005,224,419,101,1,223,223,1008,226,677,224,102,2,223,223,1006,224,434,101,1,223,223,107,226,226,224,102,2,223,223,1005,224,449,1001,223,1,223,1007,677,677,224,1002,223,2,223,1006,224,464,1001,223,1,223,1007,226,226,224,1002,223,2,223,1005,224,479,101,1,223,223,1008,226,226,224,102,2,223,223,1006,224,494,1001,223,1,223,8,226,226,224,102,2,223,223,1006,224,509,101,1,223,223,1107,677,677,224,102,2,223,223,1005,224,524,1001,223,1,223,1108,226,677,224,1002,223,2,223,1006,224,539,101,1,223,223,1107,677,226,224,1002,223,2,223,1006,224,554,101,1,223,223,1007,677,226,224,1002,223,2,223,1005,224,569,101,1,223,223,7,677,226,224,1002,223,2,223,1006,224,584,101,1,223,223,107,677,677,224,1002,223,2,223,1005,224,599,1001,223,1,223,8,226,677,224,1002,223,2,223,1005,224,614,101,1,223,223,7,677,677,224,1002,223,2,223,1006,224,629,1001,223,1,223,1107,226,677,224,1002,223,2,223,1006,224,644,101,1,223,223,108,226,226,224,102,2,223,223,1005,224,659,1001,223,1,223,8,677,226,224,1002,223,2,223,1005,224,674,101,1,223,223,4,223,99,226];
+    // let mut memory: Vec<i32> = vec![3,21,1008,21,8,20,1005,20,22,107,8,21,20,1006,20,31,1106,0,36,98,0,0,1002,21,125,20,4,20,1105,1,46,104,999,1105,1,46,1101,1000,1,20,4,20,1105,1,46,98,99];
     eprintln!("Memory =>\n   {:?}", memory);
-    memory = init_computer(memory, 1);
+    memory = init_computer(memory, 5);
     eprintln!("Memory =>\n   {:?}", memory);
 }
 
@@ -157,9 +222,9 @@ mod tests {
 
     #[test]
     fn simple_memory_evals() {
-        assert_eq!(init_computer(vec![1,0,0,0,99], 1), vec![2,0,0,0,99]);
-        assert_eq!(init_computer(vec![2,3,0,3,99], 1), vec![2,3,0,6,99]);
-        assert_eq!(init_computer(vec![2,4,4,5,99,0], 1), vec![2,4,4,5,99,9801]);
-        assert_eq!(init_computer(vec![1,1,1,4,99,5,6,0,99], 1), vec![30,1,1,4,2,5,6,0,99]);
+        assert_eq!(init_computer(vec![1,0,0,0,99], 0), vec![2,0,0,0,99]);
+        assert_eq!(init_computer(vec![2,3,0,3,99], 0), vec![2,3,0,6,99]);
+        assert_eq!(init_computer(vec![2,4,4,5,99,0], 0), vec![2,4,4,5,99,9801]);
+        assert_eq!(init_computer(vec![1,1,1,4,99,5,6,0,99], 0), vec![30,1,1,4,2,5,6,0,99]);
     }
 }
