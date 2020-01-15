@@ -16,4 +16,6 @@ Day03 -> Part1 => Done;
          Part2 => Gave up;
 Day04 -> Part1 => Done;
          Part2 => Done;
+Day05 -> Part1 => Done;
+         Part2 => Done;
 ```
